@@ -13,10 +13,11 @@ class KANLinear(torch.nn.Module):
         scale_noise=0.1,
         scale_base=1.0,
         scale_spline=1.0,
-        enable_standalone_scale_spline=True,
         base_activation=torch.nn.SiLU,
         grid_eps=0.02,
         grid_range=[-1, 1],
+        enable_standalone_scale_spline=True,
+        enable_base_weight=True,
     ):
         super(KANLinear, self).__init__()
         self.in_features = in_features
@@ -35,7 +36,7 @@ class KANLinear(torch.nn.Module):
         )
         self.register_buffer("grid", grid)
 
-        self.base_weight = torch.nn.Parameter(torch.Tensor(out_features, in_features))
+        self.base_weight = torch.nn.Parameter(torch.Tensor(out_features, in_features), requires_grad=enable_base_weight)
         self.spline_weight = torch.nn.Parameter(
             torch.Tensor(out_features, in_features, grid_size + spline_order)
         )
@@ -249,6 +250,8 @@ class KAN(torch.nn.Module):
         base_activation=torch.nn.SiLU,
         grid_eps=0.02,
         grid_range=[-1, 1],
+        enable_standalone_scale_spline=True,
+        enable_base_weight=True,
     ):
         super(KAN, self).__init__()
         self.grid_size = grid_size
@@ -268,6 +271,8 @@ class KAN(torch.nn.Module):
                     base_activation=base_activation,
                     grid_eps=grid_eps,
                     grid_range=grid_range,
+                    enable_base_weight=enable_base_weight,
+                    enable_standalone_scale_spline=enable_standalone_scale_spline
                 )
             )
 
