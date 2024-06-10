@@ -48,6 +48,7 @@ class KANLinear(torch.nn.Module):
         self.scale_noise = scale_noise
         self.scale_base = scale_base
         self.scale_spline = scale_spline
+        self.enable_base_weight = enable_base_weight
         self.enable_standalone_scale_spline = enable_standalone_scale_spline
         self.base_activation = base_activation()
         self.grid_eps = grid_eps
@@ -57,6 +58,10 @@ class KANLinear(torch.nn.Module):
     def reset_parameters(self):
         torch.nn.init.kaiming_uniform_(self.base_weight, a=math.sqrt(5) * self.scale_base)
         with torch.no_grad():
+            if not self.enable_base_weight:
+                self.base_weight.fill_(1.0)
+
+
             noise = (
                 (
                     torch.rand(self.grid_size + 1, self.in_features, self.out_features)
