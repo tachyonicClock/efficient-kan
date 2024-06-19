@@ -58,10 +58,6 @@ class KANLinear(torch.nn.Module):
     def reset_parameters(self):
         torch.nn.init.kaiming_uniform_(self.base_weight, a=math.sqrt(5) * self.scale_base)
         with torch.no_grad():
-            if not self.enable_base_weight:
-                self.base_weight.fill_(1.0)
-
-
             noise = (
                 (
                     torch.rand(self.grid_size + 1, self.in_features, self.out_features)
