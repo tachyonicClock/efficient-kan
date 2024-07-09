@@ -1,6 +1,8 @@
+from typing import Optional
 import torch
 import torch.nn.functional as F
 import math
+from torch.nn import BatchNorm1d
 
 
 class KANLinear(torch.nn.Module):
@@ -240,6 +242,9 @@ class KANLinear(torch.nn.Module):
 
 
 class KAN(torch.nn.Module):
+
+    _batch_norms: Optional[torch.nn.ModuleList]
+
     def __init__(
         self,
         layers_hidden,
@@ -253,10 +258,12 @@ class KAN(torch.nn.Module):
         grid_range=[-1, 1],
         enable_standalone_scale_spline=True,
         enable_base_weight=True,
+        batch_norm = False
     ):
         super(KAN, self).__init__()
         self.grid_size = grid_size
         self.spline_order = spline_order
+        self.batch_norm = batch_norm
 
         self.layers = torch.nn.ModuleList()
         for in_features, out_features in zip(layers_hidden, layers_hidden[1:]):
@@ -277,10 +284,19 @@ class KAN(torch.nn.Module):
                 )
             )
 
+        if self.batch_norm:
+            self._batch_norms = torch.nn.ModuleList()
+            for in_features in layers_hidden:
+                self._batch_norms.append(BatchNorm1d(in_features))
+        else:
+            self._batch_norms = None
+
     def forward(self, x: torch.Tensor, update_grid=False):
-        for layer in self.layers:
+        for layer_id, layer in enumerate(self.layers):
             if update_grid:
                 layer.update_grid(x)
+            if self.batch_norm:
+                x = self._batch_norms[layer_id](x)
             x = layer(x)
         return x
 
