@@ -287,7 +287,7 @@ class KAN(torch.nn.Module):
         if self.batch_norm:
             self._batch_norms = torch.nn.ModuleList()
             for in_features in layers_hidden:
-                self._batch_norms.append(BatchNorm1d(in_features))
+                self._batch_norms.append(BatchNorm1d(in_features, affine=False))
         else:
             self._batch_norms = None
 
