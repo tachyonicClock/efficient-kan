@@ -1,8 +1,9 @@
-from typing import Optional
+from typing import Literal, Optional
 import torch
 import torch.nn.functional as F
 import math
-from torch.nn import BatchNorm1d
+from torch.nn import BatchNorm1d, LayerNorm
+from itertools import zip_longest
 
 
 class KANLinear(torch.nn.Module):
@@ -258,50 +259,66 @@ class KAN(torch.nn.Module):
         grid_range=[-1, 1],
         enable_standalone_scale_spline=True,
         enable_base_weight=True,
-        batch_norm = False
+        norm: Literal["none", "batch", "layer"] = "none",
+        first_layer_is_linear=False,
+        last_layer_is_linear=False,
     ):
         super(KAN, self).__init__()
         self.grid_size = grid_size
         self.spline_order = spline_order
-        self.batch_norm = batch_norm
+        self.use_norm = norm != "none"
+        self.first_layer_is_linear = first_layer_is_linear
 
         self.layers = torch.nn.ModuleList()
-        for in_features, out_features in zip(layers_hidden, layers_hidden[1:]):
-            self.layers.append(
-                KANLinear(
-                    in_features,
-                    out_features,
-                    grid_size=grid_size,
-                    spline_order=spline_order,
-                    scale_noise=scale_noise,
-                    scale_base=scale_base,
-                    scale_spline=scale_spline,
-                    base_activation=base_activation,
-                    grid_eps=grid_eps,
-                    grid_range=grid_range,
-                    enable_base_weight=enable_base_weight,
-                    enable_standalone_scale_spline=enable_standalone_scale_spline
+        for layer_id, (in_features, out_features) in enumerate(zip(layers_hidden, layers_hidden[1:])):
+            if ((layer_id == 0) and first_layer_is_linear) or (layer_id == len(layers_hidden) - 2) and last_layer_is_linear:
+                self.layers.append(
+                    torch.nn.Linear(
+                        in_features,
+                        out_features
+                    )
                 )
-            )
 
-        if self.batch_norm:
-            self._batch_norms = torch.nn.ModuleList()
-            for in_features in layers_hidden:
+            else:
+                self.layers.append(
+                    KANLinear(
+                        in_features,
+                        out_features,
+                        grid_size=grid_size,
+                        spline_order=spline_order,
+                        scale_noise=scale_noise,
+                        scale_base=scale_base,
+                        scale_spline=scale_spline,
+                        base_activation=base_activation,
+                        grid_eps=grid_eps,
+                        grid_range=grid_range,
+                        enable_base_weight=enable_base_weight,
+                        enable_standalone_scale_spline=enable_standalone_scale_spline
+                    )
+                )
+
+        self._batch_norms = torch.nn.ModuleList()
+        if norm == "batch":
+            for in_features in layers_hidden[:-1]:
                 self._batch_norms.append(BatchNorm1d(in_features, affine=False))
-        else:
-            self._batch_norms = None
+        elif norm == "layer":
+            for in_features in layers_hidden[:-1]:
+                self._batch_norms.append(LayerNorm(in_features, elementwise_affine=False, bias=False))
+
 
     def forward(self, x: torch.Tensor, update_grid=False):
-        for layer_id, layer in enumerate(self.layers):
-            if update_grid:
+        x = x.flatten(1)
+        for (layer, norm) in zip_longest(self.layers, self._batch_norms):
+            if update_grid and isinstance(layer, KANLinear):
                 layer.update_grid(x)
-            if self.batch_norm:
-                x = self._batch_norms[layer_id](x)
+            if norm is not None and isinstance(norm, (LayerNorm, BatchNorm1d)):
+                x = norm(x)
             x = layer(x)
+
         return x
 
     def regularization_loss(self, regularize_activation=1.0, regularize_entropy=1.0):
         return sum(
             layer.regularization_loss(regularize_activation, regularize_entropy)
-            for layer in self.layers
+            for layer in self.layers if isinstance(layer, KANLinear)
         )

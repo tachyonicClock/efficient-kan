@@ -1,6 +1,6 @@
 [project]
 name = "efficient-kan"
-version = "0.1.2"
+version = "0.1.3"
 description = "An efficient pure-PyTorch implementation of Kolmogorov-Arnold Network (KAN)."
 authors = [
     {name = "Blealtan Cao", email = "blealtan@outlook.com"},
